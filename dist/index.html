@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0d12" />
+    <title>Motion Studio — Webcam to VRM</title>
+    <script type="module" crossorigin src="/assets/index-pE_nNCe_.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-D2yhbJcx.css">
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Motion Studio home"><span class="brand-mark">M</span><span>motion<span class="muted">studio</span></span></a>
+        <div class="topbar-right"><span class="live-indicator" id="live-indicator"></span><span id="status-label">Camera off</span><span class="top-divider"></span><span class="top-tag">LOCAL SESSION</span></div>
+      </header>
+      <main class="workspace">
+        <aside class="sidebar">
+          <div class="eyebrow">MOTION CAPTURE <span>01 / 03</span></div>
+          <h1>Bring your<br /><em>avatar to life.</em></h1>
+          <p class="intro">A real-time motion studio. Your camera feed stays on this device.</p>
+          <div class="section-label">AVATAR MODEL <span class="line"></span></div>
+          <label class="select-wrap"><span class="sr-only">Avatar model</span><select id="avatar-select"><option value="viverse_avatar_model_178277black.vrm">Viverse · Black</option><option value="viverse_avatar_model_202175.vrm">Viverse · 202175</option></select><span class="chevron">⌄</span></label>
+          <div class="section-label capture-label">CAPTURE INPUT <span class="line"></span></div>
+          <div class="camera-card"><div class="camera-icon">◎</div><div><b>Webcam</b><span>Face · body · hands</span></div><span class="camera-state" id="camera-state">OFF</span></div>
+          <button class="primary-button" id="camera-button"><span class="button-icon">◉</span><span id="button-label">Enable camera</span><span class="button-arrow">↗</span></button>
+          <div class="privacy-note"><span>◇</span> Processing happens locally in your browser.</div>
+          <section class="share-card" aria-labelledby="share-title">
+            <div class="section-label">SHARE THE APP <span class="line"></span></div>
+            <div class="share-panel">
+              <div class="share-copy"><b id="share-title">Open on your device</b><span>Scan to launch Motion Studio.</span><small id="share-hint">QR code links to this page.</small></div>
+              <a class="share-qr-link" id="share-link" aria-label="Open the Motion Studio page encoded by this QR code">
+                <img id="share-qr" alt="QR code for opening this Motion Studio page" referrerpolicy="no-referrer" />
+              </a>
+            </div>
+          </section>
+          <div class="section-label tracking-label">TRACKING <span class="line"></span></div>
+          <div class="tracking-list"><div><span class="track-dot" id="face-dot"></span>Face <small id="face-state">Waiting</small></div><div><span class="track-dot" id="pose-dot"></span>Upper body <small id="pose-state">Waiting</small></div><div><span class="track-dot" id="hands-dot"></span>Hands <small id="hands-state">Waiting</small></div></div>
+          <div class="sidebar-foot"><span class="pulse-dot"></span> MEDIAPIPE TASKS <span>·</span> VRM 1.0 / 2.0</div>
+        </aside>
+        <section class="stage-wrap"><div class="stage-top"><div><span class="stage-kicker">LIVE PREVIEW</span><span class="stage-separator">/</span><span id="stage-model-name">Viverse · Black</span></div><div class="stage-tools"><span id="fps-label">— FPS</span><button id="reset-button" title="Reset camera view">↺</button><button id="fullscreen-button" title="Toggle fullscreen">⛶</button></div></div><div id="stage" class="stage"><div class="stage-glow"></div><div class="stage-grid"></div><div class="stage-placeholder" id="stage-placeholder"><div class="placeholder-ring"><span>✳</span></div><b>Your stage is ready</b><span>Enable your camera to start tracking</span></div><div class="avatar-caption"><span class="caption-mark">✳</span><span id="caption-name">Viverse · Black</span><span class="caption-divider"></span><span id="tracking-caption">AWAITING INPUT</span></div><div id="render-host"></div><div class="webcam-preview" id="webcam-preview"><video id="webcam" playsinline muted></video><canvas id="tracking-overlay" aria-label="Face, arm and finger tracking landmarks"></canvas><span><i></i> LIVE · LANDMARKS</span></div></div><div class="stage-footer"><span><i class="footer-dot"></i> <span id="footer-status">Ready to capture</span></span><span>640 × 480 <b>·</b> <span id="latency-label">LOCAL PROCESSING</span></span></div></section>
+      </main>
+      <div id="toast" class="toast" role="status"></div>
+    </div>
+  </body>
+</html>
