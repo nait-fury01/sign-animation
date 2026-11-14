@@ -195,7 +195,7 @@ export function mountRigEditor({ rig, toast, changed }: EditorHooks) {
   function toggle(open: boolean = Boolean(panel.hidden)) {
     panel.hidden = false;
     editorHost.hidden = !open;
-    for (const node of sidebarContent) if (node instanceof HTMLElement) node.hidden = open;
+    for (const node of sidebar.children) if (node !== editorHost) (node as HTMLElement).hidden = open;
     button.classList.toggle('active', open);
     if (open) { render(); if (rig.editHold === 'off' && !document.querySelector('#camera-state.on')) setHold('rest'); apply(); }
     else setHold('off');
