@@ -1,1 +1,1 @@
-{"root":["./src/constraints.ts","./src/main.ts"],"version":"5.8.3"}
+{"root":["./src/constraints.ts","./src/main.ts","./src/avatar/ArmSolver.ts","./src/avatar/AvatarRig.ts","./src/avatar/PoseManager.ts","./src/avatar/VRMAdapter.ts","./src/avatar/rigConfig.ts","./src/editor/RigEditor.ts"],"version":"5.8.3"}

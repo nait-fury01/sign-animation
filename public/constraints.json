@@ -16,7 +16,8 @@
   ],
   "low_speed_pct": 30,
   "hips_offscreen_fraction": 0.069,
-  "generated": "2026-11-10 11:37"
+  "generated": "2026-11-10 11:37",
+  "patched": "Left wristX/elbowX/elbowY restored from constraints.json.bak (were zeroed -> elbow collapsed onto sternum)"
  },
  "outwardAngle": 0.1,
  "arms": {
@@ -30,7 +31,7 @@
     3.2672
    ],
    "wristX": [
-    0,
+    -0.6517,
     1.1566
    ],
    "wristY": [
@@ -38,12 +39,12 @@
     1.9676
    ],
    "elbowX": [
-    0,
-    0
+    0.1857,
+    1.2254
    ],
    "elbowY": [
-    0,
-    0
+    0.2095,
+    1.1376
    ],
    "maxRate": {
     "upper": 3.42,
@@ -159,10 +160,16 @@
   },
   "Right": {
    "upperRotation": -0.3787,
-   "elbowFlex": 2.8214
+   "elbowFlex": 1.4934
   }
  },
  "handAssign": {
   "maxDistSpan": 0.393
+ },
+ "soft": {
+  "workspaceMargin": 0.45,
+  "hardMargin": 1.3,
+  "angleMargin": 0.3,
+  "holdMs": 150
  }
 }

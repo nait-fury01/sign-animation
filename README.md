@@ -25,7 +25,7 @@ The preview server prints the address to open. The build output is written to `d
 ## Use the studio
 
 1. Choose an avatar from **Avatar Model**. The available VRM files are bundled in `public/`.
-2. Select **Enable camera** and grant permission. The app requests a front-facing camera at an ideal resolution of 640 × 480, with audio disabled.
+2. Select **Enable camera** and grant permission. The app requests a front-facing camera at an ideal 1280 × 720 (16:9, the same shape as the recordings the motion limits were measured from) at 30 fps, with audio disabled.
 3. Stand where your face, shoulders, elbows, and hands are visible. Keep signing movements around the chest and upper abdomen for the avatar's tracked arm workspace.
 4. Use the small **Live · Landmarks** inset to check what the trackers see. It mirrors the preview for a natural selfie view and draws face, arm, and finger landmarks over the video.
 5. Select **Disable camera** to stop the video tracks and end capture.
@@ -99,6 +99,7 @@ Detection runs in VIDEO mode at roughly 30 updates per second when the main thre
 - **The camera prompt does not appear:** open the app on localhost or HTTPS, check the browser's site permissions, and ensure another application is not exclusively using the camera.
 - **Motion capture fails while loading models:** check that the browser can reach jsDelivr and Google Cloud Storage. The first model load requires network access. The console reports the stage of startup that failed.
 - **The constraints warning says it received HTML instead of JSON:** verify that the file is named `public/constraints.json` and that the running server serves it at `/constraints.json`. Invalid JSON syntax is rejected and the app uses built-in defaults until corrected.
+- **One arm stays stuck in a fixed pose while the status says Tracking:** open the Arm HUD. `INFERRED` with `up` pinned at the same value usually means a bad range in `public/constraints.json` (a collapsed `[0,0]` range is now rejected with a console warning, and `npm test` checks the shipped file).
 - **The avatar moves weakly or falls back to its neutral pose:** improve lighting, move farther into view, uncover shoulders and hands, and keep wrists inside the workspaces configured in `public/constraints.json`.
 - **The QR image is missing:** QR generation uses an external image service; share the page address directly if that service is unavailable.
 - **The production build warns about a large JavaScript chunk:** this is currently a size warning from Vite, not a build failure.
@@ -106,3 +107,19 @@ Detection runs in VIDEO mode at roughly 30 updates per second when the main thre
 ## Research evidence
 
 The root `research/` directory is kept as local evidence for future iterations. It is not loaded by the app and is not copied into `dist/`. The current `public/constraints.json` contains the extracted control ranges; use the research evidence to review or improve those values, then update the JSON. See [Avatar control and retargeting](docs/avatar-control.md#research-evidence-and-production-build).
+
+## Setup coach, arm HUD and 3D mode (added in V4)
+
+- **Setup coach** (sidebar): live advice when you are too close/far, shoulders or elbows are out of frame, a hand leaves the picture, light is dim or behind you, the camera gives low resolution, or the app runs slowly. Tips appear only after the problem persists ~1.5 s. The static *Setup tips* list under it has the checklist: stand ~1.5–2 m back, camera at chest-to-eye level, light in front, plain contrasting top, 720p+ webcam.
+- **Arm HUD** (top-left of the stage, **D** toggles): per arm `TRACKED / INFERRED / CLAMPED / HELD / NEUTRAL / 3D`, the normalized wrist position (`wx`, `wy` in shoulder spans), upper-arm and elbow angles, and why. If an arm looks wrong, read this first. Hand landmarks in the inset are coloured by the avatar arm they drive: teal = person's Left, orange = Right.
+- **3D (beta)** (button `3D` or key **T**, or `?arms=3d`): bone directions from the pose model's world landmarks, hand orientation from a palm frame, finger spread from the landmarks. See [docs/avatar-3d.md](docs/avatar-3d.md). Falls back to the 2D path per arm when elbows are not visible.
+- **Performance:** one model runs per frame (round-robin) and bones ease toward targets in real time, so the display stays smooth while tracking updates at its own rate. Open with `?pose=lite` for a lighter pose model.
+- **Tests:** `npm test` (3D solver round-trips, constraints validation).
+
+## Avatar rig layer
+
+Rest poses, wrist calibration and per-avatar overrides are configured in `public/avatar-rig.json`; see [docs/avatar-rig.md](docs/avatar-rig.md).
+
+## Rig editor
+
+Press **E** (or the ⚙ button) in the app to open the rig editor: keep arms in front of the body, edit the rest pose, calibrate an avatar, and export `avatar-rig.json`. See `docs/rig-editor.md`.

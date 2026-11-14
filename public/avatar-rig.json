@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "runtimeRest": "signing-neutral",
+  "frontConstraint": {
+    "enabled": true,
+    "bendPlane": 70,
+    "upperArmMinForward": 8,
+    "forearmMinForward": 0,
+    "keepPalmOrientation": 1
+  },
+  "calibration": {
+    "rotationFlip": "auto",
+    "palmForwardRoll": {
+      "Left": -90,
+      "Right": 90
+    }
+  },
+  "poses": {
+    "signing-neutral": {
+      "label": "Neutral pose",
+      "description": "Typical signing posture measured from the KSL recordings (converted from constraints.json neutral). Right elbow flexion changed from 161.65 to 85.57 deg (a 161 deg neutral folds the hand onto the shoulder).",
+      "blend": 0.3,
+      "clampToTrackingLimits": true,
+      "Left": {
+        "upperArm": {
+          "lowering": 33.781592
+        },
+        "elbow": {
+          "flexion": 85.565517
+        },
+        "wrist": {
+          "palm": "forward",
+          "roll": 0
+        }
+      },
+      "Right": {
+        "upperArm": {
+          "lowering": 21.697912
+        },
+        "elbow": {
+          "flexion": 85.565517
+        },
+        "wrist": {
+          "palm": "forward",
+          "roll": 0
+        }
+      }
+    }
+  },
+  "avatars": {
+    "viverse_avatar_model_178277black.vrm": {
+      "frontConstraint": {
+        "upperArmMinForward": 19,
+        "bendPlane": 77,
+        "forearmMinForward": 28,
+        "keepPalmOrientation": 0.25
+      },
+      "poses": {
+        "signing-neutral": {
+          "Left": {
+            "upperArm": {
+              "lowering": 52.5
+            },
+            "wrist": {
+              "palm": "forward",
+              "roll": 174
+            }
+          },
+          "Right": {
+            "upperArm": {
+              "lowering": 52.5
+            },
+            "elbow": {
+              "flexion": 85.565517
+            },
+            "wrist": {
+              "palm": "forward",
+              "roll": 2
+            }
+          }
+        }
+      },
+      "joints": {
+        "left.elbow": {
+          "bone": "leftLowerArm",
+          "dofs": {
+            "flexion": {
+              "axis": "z",
+              "sign": -1,
+              "limits": [
+                0,
+                149
+              ]
+            }
+          }
+        },
+        "right.elbow": {
+          "bone": "rightLowerArm",
+          "dofs": {
+            "flexion": {
+              "axis": "z",
+              "sign": 1,
+              "limits": [
+                0,
+                149
+              ]
+            }
+          }
+        }
+      },
+      "calibration": {
+        "palmForwardRoll": {
+          "Left": -92
+        }
+      }
+    }
+  }
+}

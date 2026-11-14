@@ -30,6 +30,8 @@ export type Constraints = {
   torsoTilt: Range;
   neutral: { enabled: boolean; Left: { upperRotation: number; elbowFlex: number }; Right: { upperRotation: number; elbowFlex: number } };
   handAssign: { maxDistSpan: number };
+  /** Soft workspace handling (units: shoulder spans / radians / ms). See drivePose(). */
+  soft: { workspaceMargin: number; hardMargin: number; angleMargin: number; holdMs: number };
   fingers?: Record<string, JointLimit>; // keyed like Kalidokit output, e.g. LeftIndexProximal
 };
 
@@ -49,19 +51,28 @@ export const DEFAULT_CONSTRAINTS: Constraints = {
   torsoTilt: [-0.08, 0.08],
   neutral: { enabled: false, Left: { upperRotation: 0.4, elbowFlex: 0.3 }, Right: { upperRotation: 0.4, elbowFlex: 0.3 } },
   handAssign: { maxDistSpan: 1.5 },
+  soft: { workspaceMargin: 0.45, hardMargin: 1.3, angleMargin: 0.3, holdMs: 150 },
 };
 
 export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 export const clampRange = (v: number, r: Range) => clamp(v, r[0], r[1]);
+/** Signed distance outside [lo,hi] (0 when inside), and the same value clamped into it. */
+export const outside = (v: number, r: Range) => (v < r[0] ? r[0] - v : v > r[1] ? v - r[1] : 0);
+export const widen = (r: Range, m: number): Range => [r[0] - m, r[1] + m];
 export const inRange = (v: number, r: Range) => v >= r[0] && v <= r[1];
 
 const isRange = (v: unknown): v is Range =>
   Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === 'number' && Number.isFinite(n)) && (v as number[])[0] <= (v as number[])[1];
+/** A usable range has real width. A collapsed [0,0] range (a past data bug) pinned the Left elbow to the sternum. */
+const isWideRange = (v: unknown): v is Range => isRange(v) && v[1] - v[0] > 1e-6;
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 // Overlay `over` on `base`; anything malformed in `over` keeps the default.
 function merge<T>(base: T, over: unknown): T {
-  if (isRange(base)) return (isRange(over) ? over : base) as T;
+  if (isRange(base)) {
+    if (isRange(over) && !isWideRange(over)) console.warn('constraints.json: ignoring collapsed range', over, '- keeping the default.');
+    return (isWideRange(over) ? over : base) as T;
+  }
   if (typeof base === 'number') return (typeof over === 'number' && Number.isFinite(over) ? over : base) as T;
   if (typeof base === 'boolean') return (typeof over === 'boolean' ? over : base) as T;
   if (isObj(base) && isObj(over)) {
