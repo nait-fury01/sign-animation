@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm';
 import { FaceLandmarker, PoseLandmarker, HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import * as Kalidokit from 'kalidokit';
+import { loadConstraints, DEFAULT_CONSTRAINTS, clamp, clampRange, inRange, elbowRangeFor, rateLimit, resetRateLimits, type Constraints } from './constraints';
 
 type Point = { x: number; y: number; z?: number; visibility?: number };
 type EulerRig = { x: number; y: number; z: number };
@@ -37,6 +38,10 @@ let lastDetect = 0;
 let frameTimes: number[] = [];
 let lastToast = 0;
 let rotationFlip = 1;
+let C: Constraints = DEFAULT_CONSTRAINTS;
+let detectDt = 1 / 30;                       // seconds between tracker frames, used by the rate limiter
+const liveAspect = () => (video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 4 / 3);
+void loadConstraints('/constraints.json').then((loaded) => { C = loaded; });
 const smoothed = new Map<string, THREE.Quaternion>();
 const scratch = new THREE.Quaternion();
 
@@ -76,15 +81,40 @@ function status(text: string, active: boolean) {
 
 function setupShareQr() {
   const pageUrl = window.location.href;
-  const link = $('#share-link') as HTMLAnchorElement;
+  const openButton = $('#share-qr-open') as HTMLButtonElement;
   const image = $('#share-qr') as HTMLImageElement;
+  const largeImage = $('#share-qr-large') as HTMLImageElement;
+  const screen = $('#qr-screen');
+  const backButton = $('#qr-back') as HTMLButtonElement;
   const hint = $('#share-hint');
-  link.href = pageUrl;
-  image.src = `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=144x144&margin=3&data=${encodeURIComponent(pageUrl)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=640x640&margin=3&data=${encodeURIComponent(pageUrl)}`;
+  image.src = qrUrl;
+  largeImage.src = qrUrl;
   if (['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)) {
     hint.textContent = 'For phone access, open a deployed or network-hosted URL.';
+    $('#qr-screen-hint').textContent = 'For phone access, use a deployed or network-hosted URL.';
   }
-  image.addEventListener('error', () => { hint.textContent = 'QR unavailable. Share this page address directly.'; }, { once: true });
+  const showScreen = () => {
+    screen.hidden = false;
+    document.body.classList.add('qr-open');
+    backButton.focus();
+  };
+  const hideScreen = () => {
+    screen.hidden = true;
+    document.body.classList.remove('qr-open');
+    openButton.focus();
+  };
+  openButton.addEventListener('click', showScreen);
+  backButton.addEventListener('click', hideScreen);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !screen.hidden) hideScreen();
+  });
+  const qrFailed = () => {
+    hint.textContent = 'QR unavailable. Share this page address directly.';
+    $('#qr-screen-hint').textContent = 'QR unavailable. Share this page address directly.';
+  };
+  image.addEventListener('error', qrFailed, { once: true });
+  largeImage.addEventListener('error', qrFailed, { once: true });
 }
 setupShareQr();
 
@@ -103,7 +133,7 @@ async function loadAvatar(url: string) {
     vrm.scene.position.set(0, -1.18, 0);
     vrm.scene.scale.setScalar(1.48);
     scene.add(vrm.scene);
-    smoothed.clear();
+    smoothed.clear(); resetRateLimits();
     $('#stage-placeholder').classList.add('hidden');
   } catch (error) {
     console.error(error);
@@ -161,7 +191,7 @@ function driveFace(landmarks?: Point[], categories?: Array<{ categoryName: strin
   if (found && landmarks) {
     const leftEye = landmarks[33], rightEye = landmarks[263], nose = landmarks[1];
     if (leftEye && rightEye && nose) {
-      const roll = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+      const roll = clampRange(Math.atan2((rightEye.y - leftEye.y) / liveAspect(), rightEye.x - leftEye.x), C.head.roll);
       const eyeCenterX = (leftEye.x + rightEye.x) / 2;
       const yaw = THREE.MathUtils.clamp((nose.x - eyeCenterX) * 3.8, -0.65, 0.65);
       const eyeCenterY = (leftEye.y + rightEye.y) / 2;
@@ -183,6 +213,15 @@ function confident(point?: Point, threshold = 0.48) {
 }
 function dropArmsPose(side: HandSide) {
   const left = side === 'Left';
+  if (C.neutral.enabled) {
+    // Typical signing posture measured from the recordings, in the same angle domain as tracked frames,
+    // so tracking resumes without a visible jump. Clamped to the arm's own limits as a safety net.
+    const n = C.neutral[side], lim = C.arms[side];
+    setEuler(`${side}UpperArm`, 0, 0, clampRange(n.upperRotation, lim.upperRotation), 0.3);
+    setEuler(`${side}LowerArm`, 0, 0, left ? -clampRange(n.elbowFlex, lim.elbowFlex) : clampRange(n.elbowFlex, lim.elbowFlex), 0.3);
+    setEuler(`${side}Hand`, palmForwardRoll(side), 0, 0, 0.3);
+    return;
+  }
   // Both bundled VRMs rest in an A-pose. Rotate upper arms down alongside the
   // torso, with just a small relaxed elbow bend when tracking is unavailable.
   setEuler(`${side}UpperArm`, 0, 0, left ? 1.48 : -1.48, 0.42);
@@ -200,64 +239,59 @@ function driveTorsoTilt(lm: Point[]) {
   if (![shoulderLeft, shoulderRight, hipLeft, hipRight].every(visible)) return;
   const shouldersX = (shoulderLeft.x + shoulderRight.x) * 0.5;
   const hipsX = (hipLeft.x + hipRight.x) * 0.5;
-  const hipsY = (hipLeft.y + hipRight.y) * 0.5;
-  const shouldersY = (shoulderLeft.y + shoulderRight.y) * 0.5;
-  const sideTilt = THREE.MathUtils.clamp(Math.atan2(shouldersX - hipsX, Math.max(0.1, hipsY - shouldersY)), -0.08, 0.08);
+  const A = liveAspect();
+  const hipsY = (hipLeft.y + hipRight.y) * 0.5 / A;
+  const shouldersY = (shoulderLeft.y + shoulderRight.y) * 0.5 / A;
+  const sideTilt = clampRange(Math.atan2(shouldersX - hipsX, Math.max(0.1, hipsY - shouldersY)), C.torsoTilt);
   // Freeze hips and front/back bending. Only allow a restrained side lean.
   setEuler('Spine', 0, 0, sideTilt, 0.18);
   setEuler('Chest', 0, 0, sideTilt * 0.45, 0.18);
 }
 function drivePose(points?: Point[], trackedHands: HandMap = {}) {
   const lm = points ?? [];
+  const A = liveAspect();
   const torsoFound = confident(lm[11], 0.35) && confident(lm[12], 0.35);
   updateTrack('pose', torsoFound);
   const centerX = torsoFound ? (lm[11].x + lm[12].x) * 0.5 : 0.5;
-  const shoulderSpan = torsoFound ? Math.max(0.12, Math.abs(lm[11].x - lm[12].x)) : 0.2;
-  const shouldersY = torsoFound ? (lm[11].y + lm[12].y) * 0.5 : 0.32;
-  const hipY = confident(lm[23], 0.35) && confident(lm[24], 0.35) ? (lm[23].y + lm[24].y) * 0.5 : shouldersY + 0.42;
+  const span = torsoFound ? Math.max(0.12, Math.abs(lm[11].x - lm[12].x)) : 0.2;
+  // y is divided by the video aspect so x and y share one unit (fraction of image width).
+  // Every limit in constraints.json is expressed in this unit and in shoulder spans.
+  const shouldersY = (torsoFound ? (lm[11].y + lm[12].y) * 0.5 : 0.32) / A;
   let armCount = 0;
   for (const side of ['Left', 'Right'] as const) {
     const isLeft = side === 'Left';
-    const shoulderIndex = isLeft ? 11 : 12;
-    const elbowIndex = isLeft ? 13 : 14;
-    const wristIndex = isLeft ? 15 : 16;
-    const s = lm[shoulderIndex], e = lm[elbowIndex], poseWrist = lm[wristIndex];
+    const lim = C.arms[side];
+    const s = lm[isLeft ? 11 : 12], e = lm[isLeft ? 13 : 14], poseWrist = lm[isLeft ? 15 : 16];
     const handWrist = trackedHands[side]?.image[0];
     const w = handWrist ?? (confident(poseWrist) ? poseWrist : undefined);
-    // The wrist must stay in a compact, chest-to-upper-abdomen workspace.
-    const wristInSigningSpace = Boolean(w && w.x >= centerX - shoulderSpan * 1.05 && w.x <= centerX + shoulderSpan * 1.05 && w.y >= shouldersY + 0.015 && w.y <= hipY - 0.07);
-    if (!torsoFound || !confident(s, 0.35) || !w || !wristInSigningSpace) {
-      dropArmsPose(side);
-      continue;
-    }
+    if (!torsoFound || !confident(s, 0.35) || !w) { dropArmsPose(side); continue; }
+    // Rule 1: the wrist must lie inside the signing space measured from the recordings.
+    if (!inRange((w.x - centerX) / span, lim.wristX) || !inRange((w.y / A - shouldersY) / span, lim.wristY)) { dropArmsPose(side); continue; }
 
-    // If elbow confidence drops, infer a relaxed bent elbow between shoulder and
-    // tracked wrist. This keeps occluded arms in the normal signing workspace.
-    const elbowInSigningSpace = Boolean(e && e.x >= centerX - shoulderSpan * 1.2 && e.x <= centerX + shoulderSpan * 1.2 && e.y >= s.y + 0.04 && e.y <= hipY - 0.035);
-    let elbow = confident(e) && elbowInSigningSpace ? e : undefined;
-    if (!elbow) {
+    // Rule 2: use the tracked elbow only if it is inside the elbow workspace; otherwise infer a relaxed one.
+    let ex: number | undefined, ey: number | undefined;
+    if (e && confident(e) && inRange((e.x - centerX) / span, lim.elbowX) && inRange((e.y / A - shouldersY) / span, lim.elbowY)) { ex = e.x; ey = e.y / A; }
+    if (ex === undefined || ey === undefined) {
       const outward = s.x >= centerX ? 1 : -1;
-      const elbowYMax = hipY - 0.08;
-      const elbowYMin = Math.min(elbowYMax, Math.max(shouldersY, s.y) + 0.1);
-      elbow = {
-        x: THREE.MathUtils.clamp(s.x * 0.65 + w.x * 0.35 + outward * shoulderSpan * 0.12, centerX - shoulderSpan * 0.95, centerX + shoulderSpan * 0.95),
-        y: THREE.MathUtils.clamp((s.y + w.y) * 0.5, elbowYMin, elbowYMax),
-      };
+      ex = clamp(s.x * 0.65 + w.x * 0.35 + outward * span * 0.12, centerX + lim.elbowX[0] * span, centerX + lim.elbowX[1] * span);
+      ey = clamp((s.y / A + w.y / A) * 0.5, shouldersY + lim.elbowY[0] * span, shouldersY + lim.elbowY[1] * span);
     }
-    // Measure against the natural down-and-out arm line. Using the horizontal
-    // shoulder axis as zero made a relaxed arm look raised or folded backward.
-    const upperAngle = Math.atan2(elbow.y - s.y, elbow.x - s.x);
-    const forearmAngle = Math.atan2(w.y - elbow.y, w.x - elbow.x);
-    const outwardAngle = s.x >= centerX ? 0.78 : Math.PI - 0.78;
-    const upperRotation = wrapAngle(upperAngle - outwardAngle);
-    const elbowRotation = wrapAngle(forearmAngle - upperAngle);
-    setEuler(`${side}UpperArm`, 0, 0, THREE.MathUtils.clamp(upperRotation, -0.95, 1.2), 0.72);
-    const signedElbow = isLeft ? -Math.abs(elbowRotation) : Math.abs(elbowRotation);
-    setEuler(`${side}LowerArm`, 0, 0, THREE.MathUtils.clamp(signedElbow, -2.15, 0), 0.7);
+    const sy = s.y / A, wy = w.y / A;
+    const upperAngle = Math.atan2(ey - sy, ex - s.x);
+    const forearmAngle = Math.atan2(wy - ey, w.x - ex);
+    const outwardAngle = s.x >= centerX ? C.outwardAngle : Math.PI - C.outwardAngle;
+
+    // Rule 3: joint-angle ranges, with the elbow range conditioned on the upper-arm angle.
+    // Rule 4: a per-joint speed limit rejects single-frame landmark glitches.
+    const upper = rateLimit(`${side}U`, clampRange(wrapAngle(upperAngle - outwardAngle), lim.upperRotation), lim.maxRate.upper, detectDt);
+    const flex = rateLimit(`${side}E`, clampRange(Math.abs(wrapAngle(forearmAngle - upperAngle)), elbowRangeFor(lim, upper)), lim.maxRate.elbow, detectDt);
+    setEuler(`${side}UpperArm`, 0, 0, upper, 0.72);
+    // Previously the right elbow was clamped to [-2.15, 0] while its value was >= 0, so it never bent.
+    setEuler(`${side}LowerArm`, 0, 0, isLeft ? -flex : flex, 0.7);
     armCount++;
   }
   if (torsoFound) driveTorsoTilt(lm);
-  $('#pose-state').textContent = armCount === 2 ? 'Tracking' : armCount === 1 ? 'Partial' : 'At sides';
+  $('#pose-state').textContent = armCount === 2 ? 'Tracking' : armCount === 1 ? 'Partial' : C.neutral.enabled ? 'Neutral pose' : 'At sides';
 }
 
 const fingers = [
@@ -268,7 +302,11 @@ function resolveHands(results: Point[][], handednesses: Array<Array<{ categoryNa
   const mapped: HandMap = {};
   const leftWrist = confident(pose?.[15], 0.4) ? pose![15] : undefined;
   const rightWrist = confident(pose?.[16], 0.4) ? pose![16] : undefined;
-  const distance = (hand: Point[], wrist?: Point) => wrist && hand[0] ? Math.hypot(hand[0].x - wrist.x, hand[0].y - wrist.y) : Infinity;
+  const A = liveAspect();
+  const distance = (hand: Point[], wrist?: Point) => wrist && hand[0] ? Math.hypot(hand[0].x - wrist.x, (hand[0].y - wrist.y) / A) : Infinity;
+  const spanNow = pose && confident(pose[11], 0.35) && confident(pose[12], 0.35) ? Math.abs(pose[11].x - pose[12].x) : 0;
+  // A hand whose wrist is farther from both pose wrists than the recordings ever showed is not trusted by proximity.
+  const maxDist = spanNow > 0 ? C.handAssign.maxDistSpan * spanNow : Infinity;
   if (results.length === 2 && leftWrist && rightWrist) {
     const tracked = (index: number): TrackedHand => ({ image: results[index] });
     const direct = distance(results[0], leftWrist) + distance(results[1], rightWrist);
@@ -280,7 +318,7 @@ function resolveHands(results: Point[][], handednesses: Array<Array<{ categoryNa
   results.forEach((hand, index) => {
     const dl = distance(hand, leftWrist), dr = distance(hand, rightWrist);
     let side: HandSide;
-    if (Math.min(dl, dr) < Infinity) side = dl <= dr ? 'Left' : 'Right';
+    if (Math.min(dl, dr) <= maxDist) side = dl <= dr ? 'Left' : 'Right';
     else {
       const label = handednesses[index]?.[0]?.categoryName?.toLowerCase();
       side = label === 'left' ? 'Left' : label === 'right' ? 'Right' : index === 0 ? 'Right' : 'Left';
@@ -309,7 +347,8 @@ function driveHands(handMap: HandMap) {
           if (!rotation) continue;
           const boneName = finger === 'Little' ? `${side}HandPinky${segment === 'Proximal' ? 1 : segment === 'Intermediate' ? 2 : 3}`
             : `${side}Hand${finger}${segment === 'Proximal' ? 1 : segment === 'Intermediate' ? 2 : 3}`;
-          setEuler(boneName, rotation.x, rotation.y, rotation.z, 0.58);
+          const fl = C.fingers?.[`${side}${finger}${segment}`];
+          setEuler(boneName, fl ? clampRange(rotation.x, fl.x) : rotation.x, fl ? clampRange(rotation.y, fl.y) : rotation.y, fl ? clampRange(rotation.z, fl.z) : rotation.z, 0.58);
         }
       }
       const wrist = rig[`${side}Wrist`];
@@ -329,18 +368,62 @@ function driveHands(handMap: HandMap) {
   });
 }
 
-async function initTasks(): Promise<Tasks> {
-  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm');
+function withStartupTimeout<T>(promise: Promise<T>, label: string, onLateResult?: (value: T) => void): Promise<T> {
+  let timedOut = false;
+  let timer: number | undefined;
+  const guarded = promise.then((value) => {
+    if (timedOut) {
+      onLateResult?.(value);
+      throw new Error(`${label} finished after its startup timeout.`);
+    }
+    return value;
+  });
+  const timeout = new Promise<T>((_, reject) => {
+    timer = window.setTimeout(() => {
+      timedOut = true;
+      reject(new Error(`${label} is taking too long. Check your network connection and reload.`));
+    }, 90_000);
+  });
+  return Promise.race([guarded, timeout]).finally(() => { if (timer !== undefined) window.clearTimeout(timer); });
+}
+
+async function initTasks(onProgress: (message: string) => void): Promise<Tasks> {
+  onProgress('Loading MediaPipe runtime…');
+  const vision = await withStartupTimeout(
+    FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm'),
+    'MediaPipe WASM initialization',
+  );
   const create = async (delegate: 'GPU' | 'CPU'): Promise<Tasks> => {
-    const [face, pose, hands] = await Promise.all([
-      FaceLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate }, outputFaceBlendshapes: true, numFaces: 1, runningMode: 'VIDEO' }),
-      PoseLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task', delegate }, numPoses: 1, outputSegmentationMasks: false, runningMode: 'VIDEO' }),
-      HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate }, numHands: 2, runningMode: 'VIDEO' }),
-    ]);
-    return { face, pose, hands };
+    let face: FaceLandmarker | undefined;
+    let pose: PoseLandmarker | undefined;
+    let hands: HandLandmarker | undefined;
+    try {
+      onProgress(`Initializing face tracker (${delegate})…`);
+      face = await withStartupTimeout(
+        FaceLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate }, outputFaceBlendshapes: true, numFaces: 1, runningMode: 'VIDEO' }),
+        'Face tracker initialization', (task) => task.close(),
+      );
+      onProgress(`Initializing upper-body tracker (${delegate})…`);
+      pose = await withStartupTimeout(
+        PoseLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate }, numPoses: 1, outputSegmentationMasks: false, runningMode: 'VIDEO' }),
+        'Upper-body tracker initialization', (task) => task.close(),
+      );
+      onProgress(`Initializing hand tracker (${delegate})…`);
+      hands = await withStartupTimeout(
+        HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate }, numHands: 2, runningMode: 'VIDEO' }),
+        'Hand tracker initialization', (task) => task.close(),
+      );
+      return { face, pose, hands };
+    } catch (error) {
+      face?.close(); pose?.close(); hands?.close();
+      throw error;
+    }
   };
   try { return await create('GPU'); }
-  catch (gpuError) { console.warn('MediaPipe GPU delegate unavailable; retrying on CPU.', gpuError); return create('CPU'); }
+  catch (gpuError) {
+    console.warn('MediaPipe GPU initialization failed; retrying on CPU.', gpuError);
+    return create('CPU');
+  }
 }
 
 const handConnections: Array<[number, number]> = [
@@ -380,6 +463,7 @@ function drawOverlay(face?: Point[], pose?: Point[], hands: Point[][] = []) {
 function animate(now: number) {
   requestAnimationFrame(animate);
   if (running && tasks && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && now - lastDetect > 32) {
+    detectDt = Math.min(0.25, (now - lastDetect) / 1000);
     lastDetect = now;
     try {
       const faceResult = tasks.face.detectForVideo(video, now);
@@ -419,7 +503,7 @@ $('#camera-button').addEventListener('click', async () => {
     $('#webcam-preview').classList.add('visible');
     $('#button-label').textContent = 'Loading motion models…';
     startupStep = 'loading MediaPipe WASM and models';
-    tasks ??= await initTasks();
+    tasks ??= await initTasks((message) => { $('#button-label').textContent = message; });
     running = true; status('Camera active', true); $('#button-label').textContent = 'Disable camera';
     toast('Tracking started. Keep your face and hands in view.');
   } catch (error) {
@@ -438,7 +522,7 @@ $('#avatar-select').addEventListener('change', (event) => {
   $('#stage-model-name').textContent = label; $('#caption-name').textContent = label;
   void loadAvatar(`/${value}`);
 });
-$('#reset-button').addEventListener('click', () => { camera.position.set(0, 1.25, 5.1); camera.lookAt(0, 0.2, 0); if (vrm) { vrm.humanoid.resetNormalizedPose(); smoothed.clear(); } });
+$('#reset-button').addEventListener('click', () => { camera.position.set(0, 1.25, 5.1); camera.lookAt(0, 0.2, 0); if (vrm) { vrm.humanoid.resetNormalizedPose(); smoothed.clear(); resetRateLimits(); } });
 $('#fullscreen-button').addEventListener('click', () => { const stage = $('.stage') as HTMLElement; if (!document.fullscreenElement) void stage.requestFullscreen?.(); else void document.exitFullscreen(); });
 $('#stage-model-name').textContent = ($('#avatar-select') as HTMLSelectElement).selectedOptions[0].textContent ?? 'Viverse · Black';
 $('#caption-name').textContent = $('#stage-model-name').textContent;

@@ -1,0 +1,168 @@
+{
+ "version": 1,
+ "meta": {
+  "recordings": 1495,
+  "signers": 40,
+  "signing_frames": 53601,
+  "percentiles": [
+   0.5,
+   99.5
+  ],
+  "margin": 0.05,
+  "data_aspect": 1.7778,
+  "fps_values": [
+   25.0,
+   30.0
+  ],
+  "low_speed_pct": 30,
+  "hips_offscreen_fraction": 0.069,
+  "generated": "2026-11-10 11:37"
+ },
+ "outwardAngle": 0.1,
+ "arms": {
+  "Left": {
+   "upperRotation": [
+    -0.3563,
+    1.173
+   ],
+   "elbowFlex": [
+    0.0,
+    3.2672
+   ],
+   "wristX": [
+    0,
+    1.1566
+   ],
+   "wristY": [
+    -0.4969,
+    1.9676
+   ],
+   "elbowX": [
+    0,
+    0
+   ],
+   "elbowY": [
+    0,
+    0
+   ],
+   "maxRate": {
+    "upper": 3.42,
+    "elbow": 16.78
+   },
+   "elbowGivenUpper": {
+    "edges": [
+     0.4661,
+     0.5442,
+     0.6129,
+     0.7067
+    ],
+    "ranges": [
+     [
+      0.3367,
+      3.267
+     ],
+     [
+      0.099,
+      3.267
+     ],
+     [
+      -0.0372,
+      3.2644
+     ],
+     [
+      -0.0997,
+      3.2264
+     ],
+     [
+      -0.018,
+      3.104
+     ]
+    ]
+   }
+  },
+  "Right": {
+   "upperRotation": [
+    -0.8605,
+    0.8743
+   ],
+   "elbowFlex": [
+    0.0,
+    3.2936
+   ],
+   "wristX": [
+    -1.4542,
+    0.1588
+   ],
+   "wristY": [
+    -0.8915,
+    1.7811
+   ],
+   "elbowX": [
+    -1.3527,
+    -0.4676
+   ],
+   "elbowY": [
+    -0.1107,
+    1.1002
+   ],
+   "maxRate": {
+    "upper": 4.95,
+    "elbow": 34.63
+   },
+   "elbowGivenUpper": {
+    "edges": [
+     -0.5314,
+     -0.4249,
+     -0.3107,
+     -0.1257
+    ],
+    "ranges": [
+     [
+      -0.1248,
+      3.2894
+     ],
+     [
+      -0.0216,
+      3.2893
+     ],
+     [
+      0.0726,
+      3.286
+     ],
+     [
+      0.3225,
+      3.2732
+     ],
+     [
+      0.0182,
+      3.2842
+     ]
+    ]
+   }
+  }
+ },
+ "head": {
+  "roll": [
+   -0.4399,
+   0.4399
+  ]
+ },
+ "torsoTilt": [
+  -0.1666,
+  0.1666
+ ],
+ "neutral": {
+  "enabled": true,
+  "Left": {
+   "upperRotation": 0.5896,
+   "elbowFlex": 1.4934
+  },
+  "Right": {
+   "upperRotation": -0.3787,
+   "elbowFlex": 2.8214
+  }
+ },
+ "handAssign": {
+  "maxDistSpan": 0.393
+ }
+}
