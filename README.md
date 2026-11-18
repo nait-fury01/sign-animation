@@ -1,6 +1,6 @@
-# Motion Studio
+# Sign-Connect
 
-Motion Studio is a browser-based webcam motion-capture demo. It tracks a person's face, upper body, and hands with MediaPipe Tasks, then retargets those movements to a Three.js VRM avatar. The camera feed and landmark processing stay in the browser; no video is uploaded by the application.
+Sign-Connect is a browser-based webcam motion-capture demo. It tracks a person's face, upper body, and hands with MediaPipe Tasks, then retargets those movements to a Three.js VRM avatar. The camera feed and landmark processing stay in the browser; no video is uploaded by the application.
 
 ## Start the application
 

@@ -549,7 +549,8 @@ function renderHud() {
     return `<div class="hud-row s-${d.state.toLowerCase()}"><b>${side}</b><i>${d.state}</i><span>${nums}${d.note ? ` <em>${d.note}</em>` : ''}</span></div>`;
   };
   const detHz = detectTimes.length;
-  el.innerHTML = `<div class="hud-title">ARMS · ${use3d ? '3D (beta)' : '2D'} · ${delegateUsed} · pose ${POSE_MODEL}</div>${row('Left')}${row('Right')}<div class="hud-foot">teal = Left hand · orange = Right hand · det ${detHz}/s · D hides</div>`;
+  el.innerHTML = `<button class="hud-close" type="button" aria-label="Hide arm info">×</button><div class="hud-title">ARMS · ${use3d ? '3D (beta)' : '2D'} · ${delegateUsed} · pose ${POSE_MODEL}</div>${row('Left')}${row('Right')}<div class="hud-foot">teal = Left hand · orange = Right hand · det ${detHz}/s · D hides</div>`;
+  el.querySelector('.hud-close')?.addEventListener('click', () => setHud(false));
 }
 
 function runCoach(now: number) {

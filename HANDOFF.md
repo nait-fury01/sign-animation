@@ -1,6 +1,6 @@
 # HANDOFF (read this first)
 
-Project: Motion Studio - webcam signer -> VRM avatar (Vite, TS, three, @pixiv/three-vrm, MediaPipe Tasks, Kalidokit). Goal: faithful sign-language retargeting.
+Project: Sign-Connect - webcam signer -> VRM avatar (Vite, TS, three, @pixiv/three-vrm, MediaPipe Tasks, Kalidokit). Goal: faithful sign-language retargeting.
 Version: V4 = animationV3 + fixes below. `npm install && npm run dev`, `npm test`, `npm run build`.
 
 ## Original diagnosis (from the user's screencast)

@@ -28,7 +28,6 @@ export function mountRigEditor({ rig, toast, changed }: EditorHooks) {
   const sidebar = document.querySelector<HTMLElement>('.sidebar')!;
   const button = document.querySelector<HTMLButtonElement>('#editor-button')!;
   const panel = h('aside', { class: 'rig-editor', hidden: true, 'aria-label': 'Avatar rig editor' });
-  const sidebarContent = [...sidebar.childNodes];
   const editorHost = h('div', { class: 'sidebar-editor-host', hidden: true });
   sidebar.append(editorHost);
   editorHost.append(panel);

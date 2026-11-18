@@ -1,4 +1,4 @@
-// Rule-based constraint layer for the Motion Studio retargeter.
+// Rule-based constraint layer for the Sign-Connect retargeter.
 // Limits come from constraints.json (extracted offline from the KSL recordings);
 // DEFAULT_CONSTRAINTS approximates the previous hand-tuned numbers so the app
 // still works when that file is missing.
